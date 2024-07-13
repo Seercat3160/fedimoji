@@ -11,6 +11,14 @@ A companion server-only mod is planned, which will add some commands for searchi
 without having to send one in chat just to see it. That mod will probably not remove the need for Styled Chat, as that would be
 much more of a hassle and isn't really needed.
 
+There's a limit in this implementation of 65534 emoji. Technically it could be increased to 137468 but I don't see that as necessary.
+
+## Some notes
+
+The notation `\u0000` seems to work correctly in the `chars` array for the normal Private Use Area (part of the BMP) but not the higher Private Use Planes.
+I advise you to always just use the character in question directly (e.g. when editing config files).
+(I put `\uF0000` rather than `󰀀` in the resource pack and a bunch of other random chars on the screen became half a neofox lol)
+
 ## How it works
 
 TL;DR: We assign a codepoint in Unicode's Private Use Areas to each emoji, and put all the emoji images in one image file
@@ -19,11 +27,13 @@ Styled Chat is configured to allow people to type (for example) `:neofox:` and h
 
 This repository contains a tool to take a bunch of emoji packs as input and output all the files needed to actually put it in Minecraft.
 
-It resizes all the emoji to 8x8 pixels - that's the resolution they're displayed at in game to fit with normal text, so why store them any larger
-(clients need to download this when joining, remember) - and combines them into one image. This font bitmap is 16 glyphs wide (same as the Minecraft fonts,
-I don't know if there's any reason for this to be honest) and as many tall as is needed.
+It resizes all the emoji to 64x64 pixels (chosen by seeing how small I can make a neofox before it looks bad) to save space
+(clients need to download this when joining, remember) - and combines them into one image. This font bitmap is 1 glyph wide
+(though the Minecraft default fonts use a 16-glyph wide one - I don't know if this matters) and as many tall as is needed.
 
-To each emoji it assigns a unique Unicode codepoint in the range `U+E000` to `U+F8FF`, `U+F0000` to `U+FFFFD`, or `U+100000` to `U+10FFFD`.
+To each emoji it assigns a unique Unicode codepoint in the range `U+F0000` to `U+FFFFD`. We're only using the Supplementary Private Use Area-A because I wanted
+to use one continuous region of Unicode, but wanted more than the 6400 possible codepoints in the ordinary Private Use Area.
+
 It then makes a set of strings that tell Minecraft which codepoints map to where in the provided image. Each string represents a new row in the image,
 and each character is what character is to use the glyph in the corresponding position in the image. Blank parts of the image are `\u0000`, as each string
 must define the same number of glyphs.
