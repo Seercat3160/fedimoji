@@ -70,18 +70,9 @@ fn main() {
                 Ok(image) => Some((name, image)),
             }
         })
-        .filter_map(|(name, image)| {
-            // ensure it's square
-            if image.width() != image.height() {
-                warn!("`{name}` is not square, skipping it");
-                None
-            } else {
-                Some((name, image))
-            }
-        })
         .map(|(name, image)| {
             // resize it
-            let image = image.resize_exact(
+            let image = image.resize(
                 GLYPH_SIZE,
                 GLYPH_SIZE,
                 image::imageops::FilterType::Triangle,
