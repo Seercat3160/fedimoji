@@ -1,0 +1,13 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "fedimoji:font/emoji.png",
+      "height": 8,
+      "ascent": 8,
+      "chars": [
+        "\uE000"
+      ]
+    }
+  ]
+}
