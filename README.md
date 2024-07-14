@@ -43,12 +43,15 @@ must define the same number of glyphs.
 At the moment, this process isn't fully automated. You can't just provide a few URLs or zip files of emoji packs and have it just work.
 Maybe in the future.
 
-**Note**: This probably uses a lot of RAM while generating the glyph map, given it loads all the files into memory and processes them there.
+Note: This may use a lot of RAM, given it loads all the files into memory and processes them there.
 
 For now, here are the steps:
 
-1. Just dump a bunch of square PNGs in `./emoji/` with the file names being the names they'll be used as in-game.
+1. Just dump a bunch of PNGs (non-square images will be shrunk to fit) in `./emoji/` with the file names being the names they'll be used as in-game.
 2. Run the program. `cargo run --release` (`--release` for performance reasons) should do. If it gives any errors or advice, take note of those.
+If you are modifying an existing pack you've made, point the `--import` argument at your old `fedimoji.json` to keep the codepoints for existing emoji.
+This ensures signs people have already written using the emoji continue to render correctly.
+If you've renamed some emoji, make the changes to the names in this `fedimoji.json` so the import works right.
 3. Arrange the output files in the following way.
 
 I've provided a template for the resource pack (`./template-resource-pack/`), containing everything that isn't specific to your input. Make a copy of that (or don't).

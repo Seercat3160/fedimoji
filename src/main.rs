@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use clap::Parser;
 use image::GenericImage;
 use serde_json::json;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::FmtSubscriber;
 
 const GLYPH_SIZE: u32 = 64;
@@ -25,22 +25,40 @@ fn main() {
     tracing::subscriber::set_global_default(tracing_subscriber)
         .expect("setting default subscriber failed");
 
-    // Basic overview:
-    // 1. figure out how many emoji files we have
-    // 2. assign a codepoint to each
-    // 3. allocate a big atlas image of the right size
-    // 4. figure out the arrangement of emoji in the atlas
-    // 5. read each emoji file in order, downscale it, and place it in the atlas in the right spot
-    // 6. write the atlas to disk as `emoji.png`
-    // 7. write the font provider definition to disk as `emoji.json`
-    // 8. write the name->codepoint mapping to disk as `fedimoji.json`
-
     // ensure we can read the emoji directory
     let emoji_dir = args.emoji_dir;
     if !emoji_dir.is_dir() {
-        error!("emoji directory `{}` does not exist", emoji_dir.display());
+        error!("emoji directory {} does not exist", emoji_dir.display());
         return;
     }
+
+    // load an existing mapping file to import, if desired
+    let mut existing_mappings: HashMap<String, char> = HashMap::new();
+    if let Some(mapping_path) = args.import {
+        if !mapping_path.is_file() {
+            error!(
+                "imported mapping file {} does not exist",
+                mapping_path.display()
+            );
+            return;
+        }
+        let contents = std::fs::read_to_string(mapping_path).unwrap();
+        let mapping: HashMap<String, char> = serde_json::from_str(&contents).unwrap();
+        for (name, codepoint) in mapping {
+            if !name.is_empty() {
+                existing_mappings.insert(name.to_lowercase(), codepoint);
+            }
+        }
+        info!("imported {} existing mappings", existing_mappings.len());
+    }
+
+    // codepoints used in the existing mapping
+    let reserved_codepoints = existing_mappings.values().collect::<Vec<_>>();
+
+    // figure out which codepoints we can allocate to emoji not in the existing mapping
+    let mut available_codepoints = (0xF0000..=0xFFFFD)
+        .filter_map(char::from_u32)
+        .filter(|c| !reserved_codepoints.contains(&c));
 
     // get an iterator over all the PNG files in the emoji directory
     let images = emoji_dir
@@ -65,7 +83,11 @@ fn main() {
             // read the image
             match image::open(&path) {
                 Err(err) => {
-                    warn!("failed to read `{}` (skipping it): {}", path.display(), err);
+                    warn!(
+                        "failed to read \"{}\" (skipping it): {}",
+                        path.display(),
+                        err
+                    );
                     None
                 }
                 Ok(image) => Some((name, image)),
@@ -78,7 +100,7 @@ fn main() {
                 GLYPH_SIZE,
                 image::imageops::FilterType::Triangle,
             );
-            debug!("resized `{}`", name);
+            debug!("resized \"{}\"", name);
             (name, image)
         })
         .map(|(name, image)| {
@@ -86,8 +108,26 @@ fn main() {
             let new_name = name.trim_end_matches(".png").to_string();
             (new_name, image)
         })
-        .zip((0xF0000..=0xFFFFD).filter_map(char::from_u32))
-        .map(|((name, image), codepoint)| (name, codepoint, image))
+        .filter_map(|(name, image)| {
+            // if we have an existing mapping for this emoji, use that
+            if let Some(codepoint) = existing_mappings.get(&name) {
+                debug!(
+                    "using existing mapping for \"{name}\", U+{:04X}",
+                    *codepoint as u32
+                );
+                Some((name, *codepoint, image))
+            } else if let Some(codepoint) = available_codepoints.next() {
+                debug!(
+                    "using new mapping for \"{name}\", U+{:04X}",
+                    codepoint as u32
+                );
+                Some((name, codepoint, image))
+            } else {
+                // we ran out of codepoints
+                error!("no remaining codepoints! skipping \"{name}\"");
+                None
+            }
+        })
         .collect::<Vec<_>>();
 
     if images.is_empty() {
@@ -166,6 +206,8 @@ fn main() {
         "wrote name->codepoint mapping to `{}`",
         output_dir.join("fedimoji.json").display()
     );
+
+    info!("done! generated pack with {} glyphs", num_glyphs);
 }
 
 #[derive(clap::Parser)]
@@ -177,6 +219,10 @@ struct Args {
     /// Output directory
     #[clap(long, default_value = "./out")]
     output_dir: PathBuf,
+
+    /// Existing fedimoji.json file, from which existing emoji codepoints will be imported
+    #[clap(long, short)]
+    import: Option<PathBuf>,
 
     #[clap(short = 'v', long)]
     verbose: bool,
