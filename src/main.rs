@@ -60,6 +60,7 @@ fn main() {
                 .map(|s| s.to_string_lossy().into_owned())
                 .map(|s| (path, s))
         })
+        .map(|(path, name)| (path, name.to_lowercase()))
         .filter_map(|(path, name)| {
             // read the image
             match image::open(&path) {
